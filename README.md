@@ -1,11 +1,11 @@
-[# Meus Lugares
+[[# Meus Lugares
 
 Mapa pessoal de cachoeiras, morros, grutas, praias e pontos de acampamento em
 Santa Catarina e no Rio Grande do Sul. Um arquivo HTML só, sem servidor, sem
 build, sem dependência instalada. Abre com dois cliques.
 
 **58 lugares no mapa.** A lista vem de links do Google Maps salvos ao longo do
-tempo — os links curtos foram resolvidos para coordenadas pelo script incluído.
+tempo — os links curtos foram resolvidos para coordenadas pelo script incluído.](https://brennobenk1.github.io/Picos-de-SC/)
 
 ---
 
