@@ -1,4 +1,4 @@
-# Meus Lugares
+[# Meus Lugares
 
 Mapa pessoal de cachoeiras, morros, grutas, praias e pontos de acampamento em
 Santa Catarina e no Rio Grande do Sul. Um arquivo HTML só, sem servidor, sem
@@ -166,3 +166,4 @@ Dois pares repetidos na lista original, marcados na anotação:
 (OpenStreetMap), satélite (Esri World Imagery) e relevo (OpenTopoMap). Os pins
 são SVG inline, sem imagem externa. Tema claro e escuro, acompanhando o sistema,
 com botão para forçar um dos dois. O painel vira gaveta em tela de celular.
+](https://brennobenk1.github.io/Picos-de-SC/)
