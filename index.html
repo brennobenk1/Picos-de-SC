@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meus Lugares</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: mapa ocupa a tela, painel lateral fixo à esquerda (vira gaveta no celular) */
+:root{
+  --bg:#f3f1ec; --surface:#ffffff; --surface-2:#eceae3;
+  --fg:#1d2420; --fg-dim:#6a736d; --line:#d8d5cc;
+  --accent:#1f6f4a; --accent-soft:#e2efe7; --warn:#b4541f;
+  --font-display:'Bricolage Grotesque','Trebuchet MS',sans-serif;
+  --font-body:'IBM Plex Sans',system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#12150f; --surface:#1b1f18; --surface-2:#242921;
+  --fg:#e8ece4; --fg-dim:#99a394; --line:#333a2f;
+  --accent:#6cc08b; --accent-soft:#1f2d24; --warn:#e2914f;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#12150f; --surface:#1b1f18; --surface-2:#242921;
+  --fg:#e8ece4; --fg-dim:#99a394; --line:#333a2f;
+  --accent:#6cc08b; --accent-soft:#1f2d24; --warn:#e2914f;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:15px;overflow:hidden}
+#app{display:flex;height:100%}
+
+/* ---------- painel ---------- */
+#painel{width:360px;flex:0 0 360px;min-width:0;background:var(--surface);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;overflow:hidden}
+#painel header{padding:16px 18px 12px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+h1{font-family:var(--font-display);font-size:21px;font-weight:700;margin:0;letter-spacing:-.01em}
+.contagem{font-size:12px;color:var(--fg-dim);font-variant-numeric:tabular-nums}
+#tema{margin-left:auto;background:none;border:1px solid var(--line);color:var(--fg-dim);border-radius:8px;
+  padding:4px 8px;font-size:12px;cursor:pointer;font-family:inherit}
+
+nav.abas{display:flex;gap:2px;padding:10px 12px 0;border-bottom:1px solid var(--line)}
+nav.abas button{flex:1;background:none;border:0;border-bottom:2px solid transparent;color:var(--fg-dim);
+  font-family:inherit;font-size:13px;font-weight:500;padding:8px 4px 9px;cursor:pointer;border-radius:6px 6px 0 0}
+nav.abas button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent);background:var(--surface-2)}
+nav.abas .pill{display:inline-block;min-width:18px;margin-left:5px;padding:1px 5px;border-radius:9px;
+  background:var(--accent-soft);color:var(--accent);font-size:11px;font-variant-numeric:tabular-nums}
+
+.aba{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.aba[hidden]{display:none}
+
+input[type=search],input[type=text],textarea,select{width:100%;background:var(--bg);color:var(--fg);
+  border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-family:inherit;font-size:14px}
+textarea{resize:vertical;min-height:84px;line-height:1.45}
+input:focus-visible,textarea:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+label.campo{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--fg-dim);font-weight:500}
+
+button.acao{background:var(--accent);color:#fff;border:0;border-radius:9px;padding:10px 14px;
+  font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
+button.acao.secundaria{background:var(--surface-2);color:var(--fg);border:1px solid var(--line);font-weight:500}
+button.acao:hover{filter:brightness(1.08)}
+.linha-botoes{display:flex;gap:8px;flex-wrap:wrap}
+.linha-botoes button{flex:1 1 auto}
+
+.filtros{display:flex;flex-wrap:wrap;gap:5px}
+.filtros button{background:var(--surface-2);border:1px solid var(--line);color:var(--fg-dim);
+  border-radius:999px;padding:4px 10px;font:500 12px var(--font-body);cursor:pointer;display:flex;align-items:center;gap:5px}
+.filtros button svg{width:13px;height:13px}
+.filtros button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* lista de lugares */
+ul.lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+ul.lista li{display:flex;align-items:flex-start;gap:10px;padding:9px 10px;border:1px solid var(--line);
+  border-radius:10px;background:var(--surface-2);cursor:pointer}
+ul.lista li:hover{border-color:var(--accent)}
+ul.lista li .ic{flex:0 0 auto;width:20px;height:20px;color:var(--accent);margin-top:1px}
+ul.lista li .txt{min-width:0;flex:1}
+ul.lista li b{display:block;font-weight:600;font-size:14px;overflow-wrap:anywhere}
+ul.lista li small{color:var(--fg-dim);font-size:11.5px;font-variant-numeric:tabular-nums}
+ul.lista li.pendente .ic{color:var(--warn)}
+
+.bloco{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--surface-2)}
+.bloco h2{font-family:var(--font-display);font-size:14px;margin:0;font-weight:700}
+.dica{font-size:12px;color:var(--fg-dim);line-height:1.5;margin:0}
+.dica code{background:var(--bg);padding:1px 4px;border-radius:4px;font-size:11.5px}
+#aviso{font-size:12.5px;padding:8px 10px;border-radius:8px;background:var(--accent-soft);color:var(--accent);display:none}
+#aviso.erro{background:#f6e3d6;color:var(--warn)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #aviso.erro{background:#3a2616}}
+:root[data-theme="dark"] #aviso.erro{background:#3a2616}
+
+/* pendentes */
+.pend{border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:7px;background:var(--surface-2)}
+.pend .cab{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--fg-dim);font-variant-numeric:tabular-nums}
+.pend a{color:var(--accent);font-weight:600;text-decoration:none;font-size:13px}
+.pend a:hover{text-decoration:underline}
+
+/* ---------- mapa ---------- */
+#mapa{flex:1;min-width:0;height:100%;background:var(--surface-2)}
+.leaflet-container{font-family:var(--font-body)}
+.pin{display:grid;place-items:center;width:30px;height:30px;margin:-15px 0 0 -15px;border-radius:50% 50% 50% 8px;
+  transform:rotate(-45deg);background:var(--accent);box-shadow:0 2px 6px rgba(0,0,0,.4);border:2px solid #fff}
+.pin svg{transform:rotate(45deg);width:15px;height:15px;color:#fff}
+.pin.sem-nome{background:var(--warn)}
+.popup b{font-family:var(--font-display);font-size:15px;display:block;margin-bottom:3px}
+.popup .coord{font-size:11.5px;color:#666;font-variant-numeric:tabular-nums;display:block;margin-bottom:6px}
+.popup .nota{font-size:13px;margin:0 0 7px;line-height:1.45}
+.popup .links{display:flex;gap:10px;font-size:12.5px}
+.popup .links a,.popup .links button{color:#1f6f4a;background:none;border:0;padding:0;font:inherit;cursor:pointer;text-decoration:underline}
+
+/* mobile: painel vira gaveta */
+#abrir-painel{display:none;position:absolute;z-index:1000;top:12px;left:12px;background:var(--surface);
+  border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:9px 13px;font:600 14px var(--font-body);
+  cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+@media (max-width:820px){
+  #painel{position:absolute;z-index:1200;inset:0 auto 0 0;width:min(92vw,370px);flex-basis:auto;
+    transform:translateX(-102%);transition:transform .22s ease;box-shadow:0 0 30px rgba(0,0,0,.35)}
+  #painel.aberto{transform:none}
+  #abrir-painel{display:block}
+  #fechar-painel{display:block!important}
+}
+#fechar-painel{display:none;background:none;border:1px solid var(--line);color:var(--fg-dim);border-radius:8px;
+  padding:4px 9px;font:inherit;font-size:12px;cursor:pointer}
+@media (prefers-reduced-motion:reduce){#painel{transition:none}}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <aside id="painel">
+    <header>
+      <h1>Meus Lugares</h1>
+      <span class="contagem" id="contagem"></span>
+      <button id="tema" type="button">tema</button>
+      <button id="fechar-painel" type="button">fechar</button>
+    </header>
+
+    <nav class="abas">
+      <button id="t-lista" aria-selected="true" type="button">Lugares</button>
+      <button id="t-pend" aria-selected="false" type="button">Pendentes <span class="pill" id="pill-pend">0</span></button>
+      <button id="t-add" aria-selected="false" type="button">Adicionar</button>
+      <button id="t-dados" aria-selected="false" type="button">Dados</button>
+    </nav>
+
+    <div class="aba" id="aba-lista">
+      <input type="search" id="busca" placeholder="Buscar por nome ou anotação...">
+      <div class="filtros" id="filtros"></div>
+      <ul class="lista" id="lista"></ul>
+    </div>
+
+    <div class="aba" id="aba-pend" hidden>
+      <p class="dica">Links curtos do Maps (<code>maps.app.goo.gl</code>) não revelam as coordenadas sozinhos.
+      Abra o link, copie o endereço completo da barra do navegador e cole aqui — o nome e as coordenadas entram sozinhos.
+      Para resolver todos de uma vez, use o <code>resolver_links.py</code> no seu computador.</p>
+      <div id="pendentes"></div>
+    </div>
+
+    <div class="aba" id="aba-add" hidden>
+      <div class="bloco">
+        <h2>Colar links ou coordenadas</h2>
+        <p class="dica">Um por linha. Vale link completo do Maps, link curto, ou coordenadas soltas
+        (<code>-26.5885, -50.4001</code>). Para dar nome, escreva depois do link na mesma linha.</p>
+        <textarea id="entrada-massa" placeholder="https://www.google.com/maps/place/... Cachoeira boa&#10;-26.9627, -49.2630 lugar de acampar&#10;https://maps.app.goo.gl/..."></textarea>
+        <button class="acao" id="btn-add" type="button">Adicionar ao mapa</button>
+      </div>
+      <div class="bloco">
+        <h2>Marcar clicando no mapa</h2>
+        <p class="dica">Ligue e clique em qualquer ponto para criar um pin ali.</p>
+        <button class="acao secundaria" id="btn-clique" type="button">Ligar modo clique</button>
+      </div>
+      <div id="aviso"></div>
+    </div>
+
+    <div class="aba" id="aba-dados" hidden>
+      <div class="bloco">
+        <h2>Gravar no arquivo</h2>
+        <p class="dica">Suas alterações ficam no navegador. Para deixar permanente, copie o código abaixo e
+        cole no <code>mapa.html</code>, entre as marcas <code>INÍCIO DOS SAVES</code> e <code>FIM DOS SAVES</code>.</p>
+        <button class="acao" id="btn-codigo" type="button">Copiar código dos saves</button>
+      </div>
+      <div class="bloco">
+        <h2>Backup</h2>
+        <div class="linha-botoes">
+          <button class="acao secundaria" id="btn-exportar" type="button">Copiar JSON</button>
+          <button class="acao secundaria" id="btn-importar" type="button">Colar JSON</button>
+        </div>
+        <button class="acao secundaria" id="btn-reset" type="button">Descartar alterações do navegador</button>
+      </div>
+      <textarea id="caixa-dados" placeholder="O código/JSON aparece aqui."></textarea>
+      <div id="aviso2" style="font-size:12.5px;color:var(--fg-dim)"></div>
+    </div>
+  </aside>
+
+  <div id="mapa"></div>
+  <button id="abrir-painel" type="button">☰ Lugares</button>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ==================================================================
+   ===================  INÍCIO DOS SAVES  ===========================
+   Esta é a lista dos lugares. É só isto que você precisa editar.
+   Cada lugar:
+     id    - identificador único, não repita
+     nome  - "" (vazio) = lugar sem nome, ganha pin de barraca
+     lat   - latitude  (null = ainda sem coordenada, fica em "Pendentes")
+     lng   - longitude (null = idem)
+     tipo  - cachoeira | morro | represa | canion | camping | ponto
+     nota  - sua anotação livre
+     link  - o link do Google Maps de onde veio
+   ================================================================== */
+const LUGARES = [
+  {id:"L01", nome:"Cachoeira da Cortina", lat:-28.829348, lng:-49.915781, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/ucTEm4nDbayWPV269"},
+  {id:"L02", nome:"Morro Alto - Bela Vista", lat:null, lng:null, tipo:"morro", nota:"Campos Novos - SC. Link de endereço, sem coordenada.", link:"https://maps.app.goo.gl/8pNL5Hf9TTJTDZnw8"},
+  {id:"L03", nome:"Ponte de Ferro do Passo do Inferno", lat:null, lng:null, tipo:"ponto", nota:"RS-476, São Francisco de Paula - RS. Link de endereço, sem coordenada.", link:"https://maps.app.goo.gl/fQbtPJQMSPSq3uxQA"},
+  {id:"L04", nome:"Cachoeira Rio Vermelho", lat:-26.5885801, lng:-50.4001908, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/KkBjPbHKzNo9NUHR8"},
+  {id:"L05", nome:"Cachoeira das Esmeraldas", lat:-26.4933198, lng:-51.0094588, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/Py1uqwHVDx3AKyBq6"},
+  {id:"L06", nome:"", lat:-26.962798, lng:-49.263080, tipo:"ponto", nota:"", link:"https://maps.app.goo.gl/9HPwBAqmxYAzYpyf6"},
+  {id:"L07", nome:"Morro do Baú (819 m)", lat:-26.7995199, lng:-48.9308206, tipo:"morro", nota:"", link:"https://maps.app.goo.gl/mUL4b8mRZRXUR3qe8"},
+  {id:"L08", nome:"Cânion das Laranjeiras", lat:-28.275503, lng:-49.5860334, tipo:"canion", nota:"", link:"https://maps.app.goo.gl/5QMNNVdBf732brFQ7"},
+  {id:"L09", nome:"Morro da Baleia (1556 m)", lat:-25.9156349, lng:-48.9893296, tipo:"morro", nota:"", link:"https://maps.app.goo.gl/FKMLjJrcwy6rbNCR9"},
+  {id:"L10", nome:"Cachoeira Laje de Pedra", lat:-26.2442465, lng:-49.2162804, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/Nm1bJP6jSKQYAhAi9"},
+  {id:"L11", nome:"Descanso da Vetarana", lat:-26.594944, lng:-48.670692, tipo:"ponto", nota:"", link:"https://maps.app.goo.gl/vdq7PW5MDcNYpenD8"},
+  {id:"L12", nome:"", lat:-26.564946, lng:-48.735277, tipo:"ponto", nota:"", link:"https://maps.app.goo.gl/oUt2ksgAS8CKAhR36"},
+  {id:"L13", nome:"Morro das Antenas / Morro Boa Vista (896 m)", lat:-26.5158805, lng:-49.0537414, tipo:"morro", nota:"", link:"https://maps.app.goo.gl/dtKCXncQRm7Uosxf9"},
+  {id:"L14", nome:"", lat:-26.584701, lng:-48.747448, tipo:"ponto", nota:"", link:"https://maps.app.goo.gl/o8nkroxJsGULMSGA7"},
+  {id:"L15", nome:"Morro da Igreja (856 m)", lat:-26.364385, lng:-49.258282, tipo:"morro", nota:"", link:"https://maps.app.goo.gl/hq43nvR494pP68re7"},
+  {id:"L16", nome:"Cachoeira do Pilão", lat:-26.369872, lng:-49.188366, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/SwLRjYPq89ZxdMjo9"},
+  {id:"L17", nome:"", lat:-26.311641, lng:-49.246070, tipo:"ponto", nota:"", link:"https://maps.app.goo.gl/us6WmwAwLrkRApsx6"},
+  {id:"L18", nome:"Morro Azul Topo", lat:-26.763078, lng:-49.204469, tipo:"morro", nota:"", link:"https://maps.app.goo.gl/gDEaYsNV2GTM2XKFA"},
+  {id:"L19", nome:"Cascata Zimdars", lat:-26.653140, lng:-49.052287, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/6UaEpkAJwsUTzRG49"},
+  {id:"L20", nome:"Barragem Rio Bonito (Palmeiras)", lat:-26.607116, lng:-49.338788, tipo:"represa", nota:"", link:"https://maps.app.goo.gl/MNJ4Lhaudgf97f3z5"},
+  {id:"L21", nome:"Gruta da Santa", lat:-26.423582, lng:-49.347676, tipo:"gruta", nota:"", link:"https://maps.app.goo.gl/J1kLRLA5FQZdToKP9"},
+  {id:"L22", nome:"Cachoeira Véu de Noiva", lat:-26.660565, lng:-49.521031, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/ZiTgQdskqBwAB7rr8"},
+  {id:"L23", nome:"Cachoeira e Gruta do Índio", lat:-26.567314, lng:-49.524918, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/kxxYHQuMrz5pkLrB8"},
+  {id:"L24", nome:"Represa de Taió", lat:-27.126777, lng:-50.158253, tipo:"represa", nota:"", link:"https://maps.app.goo.gl/GfPJhs4FZq1HLr1q7"},
+  {id:"L25", nome:"Salto do Guamiranga", lat:-26.533186, lng:-48.853971, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/9X53Kkdh9szd6qw58"},
+  {id:"L26", nome:"Represa do Itapocu", lat:-26.476414, lng:-48.982448, tipo:"represa", nota:"", link:"https://maps.app.goo.gl/fJ5VjQ5GyEejsizG8"},
+  {id:"L27", nome:"Morro da Pedra (370 m)", lat:-26.795458, lng:-48.770823, tipo:"morro", nota:"", link:"https://maps.app.goo.gl/kqvzEv6rXv4YhAXN6"},
+  {id:"L28", nome:"Queda d'água Luiz Alves", lat:-26.738325, lng:-48.902534, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/Q1paf7BTWgen3RZ66"},
+  {id:"L29", nome:"Bom Jardim da Serra", lat:-28.319542, lng:-49.705451, tipo:"camping", nota:"Acampável", link:"https://maps.app.goo.gl/Nr4Vw26utwGdDfnf9"},
+  {id:"L30", nome:"Pedreira", lat:-27.722760, lng:-50.174154, tipo:"ponto", nota:"", link:"https://maps.app.goo.gl/yuSSmDFExK4hiPSJ9"},
+  {id:"L31", nome:"Cachoeira do Tigre", lat:-26.118824, lng:-50.239431, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/8agNyVRsniEeQpwv7"},
+  {id:"L32", nome:"Mirantes da Serra", lat:-26.203205, lng:-49.192986, tipo:"mirante", nota:"", link:"https://maps.app.goo.gl/pRg7fQBUmDLKNrSK9"},
+  {id:"L33", nome:"Cachoeira da Serrinha", lat:-26.200437, lng:-48.702813, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/htE3bj5Uknp6wote7"},
+  {id:"L34", nome:"Cachoeira do Olho", lat:-26.203418, lng:-48.701390, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/gZ8Qtaaj787s5m2E8"},
+  {id:"L35", nome:"Ponta da Praia Bonita", lat:-26.199652, lng:-48.654885, tipo:"praia", nota:"", link:"https://maps.app.goo.gl/PAfZs8UZDXEK8ZJn8"},
+  {id:"L36", nome:"Mirante do Parque Acaraí", lat:-26.245455, lng:-48.517430, tipo:"mirante", nota:"", link:"https://maps.app.goo.gl/vgycgMk5nQ5zwhUUA"},
+  {id:"L37", nome:"Praia da Armação da Piedade", lat:-27.378818, lng:-48.535254, tipo:"praia", nota:"", link:"https://maps.app.goo.gl/fZjVZ5H7MepVjEMM9"},
+  {id:"L38", nome:"Trilha da Guarda do Embaú", lat:-27.904936, lng:-48.582645, tipo:"trilha", nota:"", link:"https://maps.app.goo.gl/71xrRmqDbQ75pmGi8"},
+  {id:"L39", nome:"Santuário N. Sra. do Bom Socorro - Morro da Cruz", lat:-27.265404, lng:-48.912978, tipo:"morro", nota:"", link:"https://maps.app.goo.gl/KuaWGYBGx9JRuHss5"},
+  {id:"L40", nome:"Parque Ecológico Spitzkopf", lat:-27.005849, lng:-49.111020, tipo:"trilha", nota:"", link:"https://maps.app.goo.gl/JU5XSJ9mjqCC22aZ6"},
+  {id:"L41", nome:"Salto Andorinhas", lat:-27.013153, lng:-49.310978, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/44rYye8f5XKcqYSx6"},
+  {id:"L42", nome:"Pico do Bateias", lat:-27.019770, lng:-48.916197, tipo:"morro", nota:"", link:"https://maps.app.goo.gl/Sx7CGCnvwt5e74Pv5"},
+  {id:"L43", nome:"Caverna Rio dos Bugres", lat:-27.965612, lng:-49.509161, tipo:"gruta", nota:"", link:"https://maps.app.goo.gl/csVy4FmhbaGshzgY7"},
+  {id:"L44", nome:"Gruta do Monge São João Maria", lat:-26.242774, lng:-51.076723, tipo:"gruta", nota:"", link:"https://maps.app.goo.gl/NCP3gUGtGPJvdguV9"},
+  {id:"L45", nome:"Cachoeira Salto Pilão", lat:-26.275925, lng:-49.162758, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/RbBU1QeJVYYpvu9J8"},
+  {id:"L46", nome:"Cachoeira do Monte Crista", lat:-26.097635, lng:-48.923228, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/Utj1aZBrtTtdU3sj6"},
+  {id:"L47", nome:"Cachoeira Salto do Engenho", lat:-26.140919, lng:-49.293346, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/MVc5WuK77nv6EZ82A"},
+  {id:"L48", nome:"Mirante da Primeira Pedra de Itapoá", lat:-26.071528, lng:-48.603367, tipo:"mirante", nota:"", link:"https://maps.app.goo.gl/4oLXJ6S2sABtjFr87"},
+  {id:"L49", nome:"Cachoeira Salto Pilão", lat:-26.275925, lng:-49.162758, tipo:"cachoeira", nota:"Repetido: mesmo lugar que L45", link:"https://maps.app.goo.gl/8oWVpu97q44nVcqb6"},
+  {id:"L50", nome:"Trilha do Rio do Boi", lat:-29.202047, lng:-50.042685, tipo:"trilha", nota:"", link:"https://maps.app.goo.gl/cHr1B5MQEwe16ZQw9"},
+  {id:"L51", nome:"Cachoeira da Usina Getúlio Telles", lat:-29.344102, lng:-50.090327, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/eGuDKJrXuUYS7Bc86"},
+  {id:"L52", nome:"Cachoeira da Cortina", lat:-28.829348, lng:-49.915781, tipo:"cachoeira", nota:"Repetido: mesmo lugar que L01", link:"https://maps.app.goo.gl/1zaw5ogLXZGuLKiC8"},
+  {id:"L53", nome:"Cachoeira Rio Campo Novo do Sul", lat:-27.895151, lng:-49.308905, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/ZFsQNF9uzfrG2Xjq7"},
+  {id:"L54", nome:"Soldados Sebold", lat:-27.852278, lng:-49.284573, tipo:"ponto", nota:"", link:"https://maps.app.goo.gl/Kmz9Pd129oUKjZtx8"},
+  {id:"L55", nome:"Cânion Arroio do Leão", lat:-27.722884, lng:-49.323282, tipo:"canion", nota:"", link:"https://maps.app.goo.gl/csXkuG5Lpe2ryRa77"},
+  {id:"L56", nome:"Lagoa da Serra dos Tropeiros", lat:-27.643827, lng:-49.235737, tipo:"represa", nota:"", link:"https://maps.app.goo.gl/DHAoMFpmMsMxspxAA"},
+  {id:"L57", nome:"Cachoeira Furna dos Tropeiros", lat:-27.641410, lng:-49.218135, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/UuQ7wXt2PMUV8fBP9"},
+  {id:"L58", nome:"Cachoeira Três Amigos", lat:-27.740063, lng:-48.890062, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/7929R6s5RoPfshxU8"},
+  {id:"L59", nome:"Cachoeira dos Prim", lat:-27.740937, lng:-48.865238, tipo:"cachoeira", nota:"", link:"https://maps.app.goo.gl/32oRU7VmEXDonnRZ7"},
+  {id:"L60", nome:"Cachoeira do Fojo", lat:-27.847688, lng:-48.872063, tipo:"cachoeira", nota:"Santo Amaro da Imperatriz - SC (Plus Code 542H+W5 decodificado)", link:"https://maps.app.goo.gl/igbwGWydFPv1rSgz8"}
+];
+/* ====================  FIM DOS SAVES  ============================= */
+
+
+/* ---- Estado salvo no navegador (edições e lugares novos) --------- */
+const CHAVE = "meus_lugares_v1";
+let estado = {edicoes:{}, novos:[], removidos:[]};
+try{ const b = localStorage.getItem(CHAVE); if(b) estado = Object.assign(estado, JSON.parse(b)); }catch(e){}
+function salvar(){ try{ localStorage.setItem(CHAVE, JSON.stringify(estado)); }catch(e){} }
+
+function lugares(){
+  const base = LUGARES.filter(l => !estado.removidos.includes(l.id))
+    .map(l => Object.assign({}, l, estado.edicoes[l.id] || {}));
+  const novos = estado.novos.filter(l => !estado.removidos.includes(l.id))
+    .map(l => Object.assign({}, l, estado.edicoes[l.id] || {}));
+  return base.concat(novos);
+}
+function acharLugar(id){ return lugares().find(l => l.id === id); }
+function editar(id, campos){ estado.edicoes[id] = Object.assign({}, estado.edicoes[id], campos); salvar(); redesenhar(); }
+
+/* ---- Leitura de links / coordenadas ------------------------------ */
+function extrair(texto){
+  const t = (texto || "").trim();
+  if(!t) return null;
+  let lat = null, lng = null, nome = "";
+  let m = t.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if(!m) m = t.match(/[?&]q=(-?\d+(?:\.\d+)?),\s*\+?(-?\d+(?:\.\d+)?)/);
+  if(!m) m = t.match(/\/maps\/search\/(-?\d+(?:\.\d+)?),\s*\+?(-?\d+(?:\.\d+)?)/);
+  if(!m) m = t.match(/\/maps\/place\/(-?\d+(?:\.\d+)?),\s*\+?(-?\d+(?:\.\d+)?)/);
+  if(!m) m = t.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
+  if(!m) m = t.match(/(^|\s)(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{1,3}\.\d{3,})/);
+  if(m){
+    if(m.length === 4){ lat = parseFloat(m[2]); lng = parseFloat(m[3]); }
+    else { lat = parseFloat(m[1]); lng = parseFloat(m[2]); }
+  }
+  const mn = t.match(/\/maps\/place\/([^\/@?]+)/);
+  if(mn){
+    const cru = decodeURIComponent(mn[1]).replace(/\+/g, " ").trim();
+    if(!/^-?\d+\.\d+,/.test(cru)) nome = cru.split(",")[0].trim();
+  }
+  const extra = t.replace(/https?:\/\/\S+/g, "").replace(/(^|\s)-?\d{1,3}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/, "").trim();
+  const link = (t.match(/https?:\/\/\S+/) || [""])[0];
+  if(lat === null && !link) return null;
+  if(lat !== null && (Math.abs(lat) > 90 || Math.abs(lng) > 180)) return null;
+  return {lat, lng, nome, nota: extra, link};
+}
+function tipoPorNome(n){
+  const s = (n || "").toLowerCase();
+  if(/cachoeir|cascata|queda|salto|v[ée]u de noiva/.test(s)) return "cachoeira";
+  if(/gruta|caverna|furna|toca/.test(s)) return "gruta";
+  if(/c[âa]nion|canyon/.test(s)) return "canion";
+  if(/represa|barragem|lago|lagoa|a[çc]ude/.test(s)) return "represa";
+  if(/praia|ponta|costa|enseada|ilha/.test(s)) return "praia";
+  if(/mirante|vista panor/.test(s)) return "mirante";
+  if(/trilha|parque|caminho|trekking/.test(s)) return "trilha";
+  if(/morro|pico|monte|serra|pedra|cume/.test(s)) return "morro";
+  if(/camping|acamp/.test(s)) return "camping";
+  return "ponto";
+}
+function novoId(){
+  let n = 1, usados = lugares().map(l => l.id);
+  while(usados.includes("N" + String(n).padStart(2, "0"))) n++;
+  return "N" + String(n).padStart(2, "0");
+}
+
+/* ---- Ícones ------------------------------------------------------ */
+const SVGS = {
+  barraca:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 3 20h18L12 4Z"/><path d="M12 10v10"/></svg>',
+  cachoeira:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c2.5 4 5 6.5 5 9.5A5 5 0 0 1 7 12.5C7 9.5 9.5 7 12 3Z"/></svg>',
+  morro:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19 10 7l4 6 2-3 5 9H3Z"/></svg>',
+  represa:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9h20"/><path d="M3 14c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0"/><path d="M3 19c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0"/></svg>',
+  canion:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v16"/><path d="M20 4v16"/><path d="M8 20c0-5 2-8 4-8s4 3 4 8"/></svg>',
+  camping:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 3 20h18L12 4Z"/><path d="M12 10v10"/></svg>',
+  gruta:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V12a9 9 0 0 1 18 0v9"/><path d="M9 21v-4a3 3 0 0 1 6 0v4"/></svg>',
+  praia:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="17" cy="7" r="3"/><path d="M2 16c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0"/><path d="M2 21c2-1.5 4-1.5 6 0s4 1.5 6 0 4-1.5 6 0"/></svg>',
+  trilha:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21c0-4 4-4 4-8s-4-4-4-8"/><path d="M17 3c0 4-4 4-4 8s4 4 4 8"/></svg>',
+  mirante:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="14" r="3.5"/><circle cx="17" cy="14" r="3.5"/><path d="M10.5 14h3"/><path d="M5 10.5 7 5h3"/><path d="M19 10.5 17 5h-3"/></svg>'
+};
+function svgDe(l){
+  if(!l.nome) return SVGS.barraca;
+  return SVGS[l.tipo] || SVGS.barraca;
+}
+function iconeDe(l){
+  return L.divIcon({className:"", iconSize:[0,0],
+    html:'<div class="pin'+(l.nome ? "" : " sem-nome")+'">'+svgDe(l)+'</div>'});
+}
+
+/* ---- Mapa -------------------------------------------------------- */
+const mapa = L.map("mapa", {zoomControl:true}).setView([-26.7, -49.3], 8);
+const ruas = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(mapa);
+const satelite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+  maxZoom:19, attribution:'Imagens &copy; Esri'});
+const relevo = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+  maxZoom:17, attribution:'&copy; OpenTopoMap'});
+L.control.layers({"Ruas":ruas, "Satélite":satelite, "Relevo":relevo}, null, {position:"topright"}).addTo(mapa);
+
+let camada = L.layerGroup().addTo(mapa);
+const marcadores = {};
+
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function popupDe(l){
+  const d = document.createElement("div");
+  d.className = "popup";
+  d.innerHTML =
+    "<b>" + esc(l.nome || "Lugar sem nome") + "</b>" +
+    '<span class="coord">' + l.lat.toFixed(6) + ", " + l.lng.toFixed(6) + " · " + esc(l.id) + "</span>" +
+    (l.nota ? '<p class="nota">' + esc(l.nota) + "</p>" : "") +
+    '<div class="links">' +
+      '<a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=' + l.lat + "," + l.lng + '">Google Maps</a>' +
+      '<button type="button" data-ed="' + esc(l.id) + '">Editar</button>' +
+      '<button type="button" data-rm="' + esc(l.id) + '">Remover</button>' +
+    "</div>";
+  d.addEventListener("click", ev => {
+    const ed = ev.target.getAttribute("data-ed"), rm = ev.target.getAttribute("data-rm");
+    if(ed) abrirEdicao(ed);
+    if(rm){ estado.removidos.push(rm); salvar(); mapa.closePopup(); redesenhar(); }
+  });
+  return d;
+}
+
+function abrirEdicao(id){
+  const l = acharLugar(id); if(!l) return;
+  // editor simples dentro do painel
+  mostrarAba("add");
+  const caixa = document.getElementById("entrada-massa");
+  caixa.value = "";
+  document.getElementById("aviso").style.display = "block";
+  document.getElementById("aviso").className = "";
+  document.getElementById("aviso").innerHTML =
+    'Editando <b>' + esc(l.id) + '</b>: <input id="ed-nome" type="text" value="' + esc(l.nome) + '" placeholder="nome"> ' +
+    '<input id="ed-nota" type="text" value="' + esc(l.nota) + '" placeholder="anotação" style="margin-top:6px"> ' +
+    '<button class="acao" id="ed-ok" type="button" style="margin-top:8px">Salvar</button>';
+  document.getElementById("ed-ok").onclick = () => {
+    const n = document.getElementById("ed-nome").value.trim();
+    editar(id, {nome:n, nota:document.getElementById("ed-nota").value.trim(), tipo:tipoPorNome(n)});
+    document.getElementById("aviso").style.display = "none";
+    mostrarAba("lista");
+  };
+}
+
+function redesenhar(){
+  camada.clearLayers();
+  for(const k in marcadores) delete marcadores[k];
+  const todos = lugares();
+  desenharFiltros(todos);
+  const comCoord = todos.filter(l => l.lat != null && l.lng != null);
+  comCoord.filter(l => !filtroTipo || (l.tipo || "ponto") === filtroTipo).forEach(l => {
+    const m = L.marker([l.lat, l.lng], {icon:iconeDe(l), title:l.nome || "sem nome"});
+    m.bindPopup(popupDe(l), {maxWidth:280});
+    m.addTo(camada);
+    marcadores[l.id] = m;
+  });
+  const pend = todos.filter(l => l.lat == null || l.lng == null);
+  document.getElementById("contagem").textContent = comCoord.length + " no mapa · " + pend.length + " pendentes";
+  document.getElementById("pill-pend").textContent = pend.length;
+  desenharLista(comCoord, pend);
+  desenharPendentes(pend);
+}
+
+let filtroTipo = "";
+const NOMES_TIPO = {cachoeira:"Cachoeiras", morro:"Morros", gruta:"Grutas", canion:"Cânions",
+  represa:"Represas", praia:"Praias", trilha:"Trilhas", mirante:"Mirantes", camping:"Camping", ponto:"Outros"};
+
+function desenharFiltros(todos){
+  const cx = document.getElementById("filtros");
+  const contas = {};
+  todos.forEach(l => { const t = l.tipo || "ponto"; contas[t] = (contas[t] || 0) + 1; });
+  cx.innerHTML = "";
+  const fazer = (tipo, rotulo, n) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("aria-pressed", filtroTipo === tipo ? "true" : "false");
+    b.innerHTML = (tipo ? SVGS[tipo] || SVGS.barraca : "") + rotulo + " " + n;
+    b.onclick = () => { filtroTipo = (filtroTipo === tipo ? "" : tipo); redesenhar(); };
+    cx.appendChild(b);
+  };
+  fazer("", "Todos", todos.length);
+  Object.keys(NOMES_TIPO).forEach(t => { if(contas[t]) fazer(t, NOMES_TIPO[t], contas[t]); });
+}
+
+function desenharLista(comCoord, pend){
+  const termo = document.getElementById("busca").value.trim().toLowerCase();
+  const ul = document.getElementById("lista");
+  ul.innerHTML = "";
+  const filtrar = l =>
+    (!termo || ((l.nome || "") + " " + (l.nota || "") + " " + l.id).toLowerCase().includes(termo)) &&
+    (!filtroTipo || (l.tipo || "ponto") === filtroTipo);
+  comCoord.filter(filtrar).forEach(l => {
+    const li = document.createElement("li");
+    li.innerHTML = '<span class="ic">' + svgDe(l) + '</span><span class="txt"><b>' +
+      esc(l.nome || "Lugar sem nome") + "</b><small>" + l.lat.toFixed(5) + ", " + l.lng.toFixed(5) +
+      (l.nota ? " · " + esc(l.nota) : "") + "</small></span>";
+    li.onclick = () => {
+      mapa.flyTo([l.lat, l.lng], 15, {duration:.8});
+      if(marcadores[l.id]) setTimeout(() => marcadores[l.id].openPopup(), 850);
+      document.getElementById("painel").classList.remove("aberto");
+    };
+    ul.appendChild(li);
+  });
+  pend.filter(filtrar).forEach(l => {
+    const li = document.createElement("li");
+    li.className = "pendente";
+    li.innerHTML = '<span class="ic">' + SVGS.barraca + '</span><span class="txt"><b>' +
+      esc(l.nome || "Sem coordenada ainda") + "</b><small>" + esc(l.id) + " · falta resolver o link</small></span>";
+    li.onclick = () => mostrarAba("pend");
+    ul.appendChild(li);
+  });
+  if(!ul.children.length) ul.innerHTML = '<li style="cursor:default;justify-content:center;color:var(--fg-dim)">Nada encontrado.</li>';
+}
+
+function desenharPendentes(pend){
+  const box = document.getElementById("pendentes");
+  box.innerHTML = "";
+  if(!pend.length){ box.innerHTML = '<p class="dica">Tudo resolvido. Nenhum link pendente.</p>'; return; }
+  pend.forEach(l => {
+    const d = document.createElement("div");
+    d.className = "pend";
+    d.innerHTML = '<div class="cab"><b style="color:var(--fg)">' + esc(l.id) + "</b>" +
+      (l.nome ? " · " + esc(l.nome) : "") + "</div>" +
+      '<a href="' + esc(l.link) + '" target="_blank" rel="noopener">Abrir no Google Maps ↗</a>' +
+      '<input type="text" placeholder="cole aqui o endereço completo ou as coordenadas">';
+    const inp = d.querySelector("input");
+    inp.addEventListener("input", () => {
+      const r = extrair(inp.value);
+      if(r && r.lat != null){
+        const nome = l.nome || r.nome || "";
+        editar(l.id, {lat:r.lat, lng:r.lng, nome:nome, tipo:tipoPorNome(nome)});
+        mapa.flyTo([r.lat, r.lng], 14, {duration:.8});
+      }
+    });
+    box.appendChild(d);
+  });
+}
+
+/* ---- Abas -------------------------------------------------------- */
+const abas = {lista:"aba-lista", pend:"aba-pend", add:"aba-add", dados:"aba-dados"};
+const botoesAba = {lista:"t-lista", pend:"t-pend", add:"t-add", dados:"t-dados"};
+function mostrarAba(nome){
+  for(const k in abas){
+    document.getElementById(abas[k]).hidden = (k !== nome);
+    document.getElementById(botoesAba[k]).setAttribute("aria-selected", k === nome ? "true" : "false");
+  }
+  document.getElementById("painel").classList.add("aberto");
+}
+for(const k in botoesAba) document.getElementById(botoesAba[k]).onclick = () => mostrarAba(k);
+document.getElementById("busca").addEventListener("input", redesenhar);
+document.getElementById("abrir-painel").onclick = () => document.getElementById("painel").classList.add("aberto");
+document.getElementById("fechar-painel").onclick = () => document.getElementById("painel").classList.remove("aberto");
+document.getElementById("tema").onclick = () => {
+  const atual = document.documentElement.getAttribute("data-theme");
+  const escuro = atual ? atual === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  document.documentElement.setAttribute("data-theme", escuro ? "light" : "dark");
+};
+
+/* ---- Adicionar --------------------------------------------------- */
+function avisar(msg, erro){
+  const a = document.getElementById("aviso");
+  a.style.display = "block"; a.className = erro ? "erro" : ""; a.textContent = msg;
+}
+document.getElementById("btn-add").onclick = () => {
+  const linhas = document.getElementById("entrada-massa").value.split("\n").map(s => s.trim()).filter(Boolean);
+  if(!linhas.length) return avisar("Cole pelo menos uma linha.", true);
+  let postos = 0, pendentes = 0, ruins = 0;
+  linhas.forEach(linha => {
+    const r = extrair(linha);
+    if(!r){ ruins++; return; }
+    const nome = r.nome || "";
+    const novo = {id:novoId(), nome:nome, lat:r.lat, lng:r.lng, tipo:tipoPorNome(nome), nota:r.nota || "", link:r.link || ""};
+    estado.novos.push(novo);
+    if(r.lat != null) postos++; else pendentes++;
+  });
+  salvar(); redesenhar();
+  document.getElementById("entrada-massa").value = "";
+  avisar(postos + " no mapa, " + pendentes + " sem coordenada" + (ruins ? ", " + ruins + " não entendi" : "") + ".", false);
+  const ult = estado.novos.filter(l => l.lat != null).pop();
+  if(ult) mapa.flyTo([ult.lat, ult.lng], 13, {duration:.8});
+};
+
+let modoClique = false;
+document.getElementById("btn-clique").onclick = function(){
+  modoClique = !modoClique;
+  this.textContent = modoClique ? "Desligar modo clique" : "Ligar modo clique";
+  document.getElementById("mapa").style.cursor = modoClique ? "crosshair" : "";
+  if(modoClique) document.getElementById("painel").classList.remove("aberto");
+};
+mapa.on("click", ev => {
+  if(!modoClique) return;
+  const novo = {id:novoId(), nome:"", lat:+ev.latlng.lat.toFixed(6), lng:+ev.latlng.lng.toFixed(6),
+    tipo:"ponto", nota:"", link:""};
+  estado.novos.push(novo); salvar(); redesenhar();
+  if(marcadores[novo.id]) marcadores[novo.id].openPopup();
+});
+
+/* ---- Dados ------------------------------------------------------- */
+function codigoDosSaves(){
+  const linhas = lugares().map(l =>
+    '  {id:"' + l.id + '", nome:' + JSON.stringify(l.nome || "") +
+    ", lat:" + (l.lat == null ? "null" : l.lat) +
+    ", lng:" + (l.lng == null ? "null" : l.lng) +
+    ', tipo:"' + (l.tipo || "ponto") + '", nota:' + JSON.stringify(l.nota || "") +
+    ", link:" + JSON.stringify(l.link || "") + "}");
+  return "const LUGARES = [\n" + linhas.join(",\n") + "\n];";
+}
+function copiar(texto, alvo){
+  document.getElementById("caixa-dados").value = texto;
+  const ok = () => { document.getElementById("aviso2").textContent = "Copiado. Também está na caixa abaixo."; };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(texto).then(ok).catch(() => {
+      document.getElementById("caixa-dados").select();
+      document.getElementById("aviso2").textContent = "Selecione a caixa abaixo e copie com Ctrl+C.";
+    });
+  } else {
+    document.getElementById("caixa-dados").select();
+    document.getElementById("aviso2").textContent = "Selecione a caixa abaixo e copie com Ctrl+C.";
+  }
+}
+document.getElementById("btn-codigo").onclick = () => copiar(codigoDosSaves());
+document.getElementById("btn-exportar").onclick = () => copiar(JSON.stringify(lugares(), null, 2));
+document.getElementById("btn-importar").onclick = () => {
+  const txt = document.getElementById("caixa-dados").value.trim();
+  if(!txt) return document.getElementById("aviso2").textContent = "Cole o JSON na caixa primeiro.";
+  try{
+    const arr = JSON.parse(txt);
+    if(!Array.isArray(arr)) throw 0;
+    estado = {edicoes:{}, novos:arr, removidos:LUGARES.map(l => l.id)};
+    salvar(); redesenhar();
+    document.getElementById("aviso2").textContent = arr.length + " lugares carregados.";
+  }catch(e){ document.getElementById("aviso2").textContent = "Esse texto não é um JSON de lugares válido."; }
+};
+document.getElementById("btn-reset").onclick = () => {
+  estado = {edicoes:{}, novos:[], removidos:[]};
+  salvar(); redesenhar();
+  document.getElementById("aviso2").textContent = "Voltou para a lista que está no arquivo.";
+};
+
+/* ---- Início ------------------------------------------------------ */
+redesenhar();
+const comCoord = lugares().filter(l => l.lat != null);
+if(comCoord.length) mapa.fitBounds(comCoord.map(l => [l.lat, l.lng]), {padding:[50, 50]});
+</script>
+</body>
+</html>
